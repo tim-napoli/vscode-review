@@ -1,0 +1,82 @@
+{
+  "name": "antiquita-review",
+  "displayName": "Antiquita Review",
+  "description": "Comment on the staged diff, save to .review.json",
+  "version": "0.0.1",
+  "publisher": "timothee-napoli",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "antiquitaReview.createComment",
+        "title": "Add comment"
+      },
+      {
+        "command": "antiquitaReview.deleteComment",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "antiquitaReview.editComment",
+        "title": "Edit",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "antiquitaReview.saveComment",
+        "title": "Save"
+      },
+      {
+        "command": "antiquitaReview.cancelEditComment",
+        "title": "Cancel"
+      }
+    ],
+    "menus": {
+      "comments/commentThread/context": [
+        {
+          "command": "antiquitaReview.createComment",
+          "group": "inline",
+          "when": "commentController == antiquitaReview"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "antiquitaReview.editComment",
+          "group": "group@1",
+          "when": "commentController == antiquitaReview && comment == editable"
+        },
+        {
+          "command": "antiquitaReview.deleteComment",
+          "group": "group@2",
+          "when": "commentController == antiquitaReview && comment == editable"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "antiquitaReview.cancelEditComment",
+          "group": "inline@1",
+          "when": "commentController == antiquitaReview"
+        },
+        {
+          "command": "antiquitaReview.saveComment",
+          "group": "inline@2",
+          "when": "commentController == antiquitaReview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}
