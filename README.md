@@ -1,14 +1,14 @@
 # VSCode Review
 
-Extension VSCode : commenter le diff staged via la Comments API. Gouttière "+" sur le
-diff staged → commentaire inline → écrit dans `.review.json` (racine repo, git-ignoré).
+VSCode extension: comment on the staged diff via the Comments API. "+" gutter on the
+staged diff → inline comment → written to `.review.json` (repo root, git-ignored).
 
 ## Structure
 
-- `package.json` — manifest extension (commands, menus comments/*)
-- `src/extension.ts` — logique, compilée vers `out/`
-- `tsconfig.json` — `types: ["vscode", "node"]` volontaire, sinon tsc remonte dans
-  `../../node_modules/@types` (three, webgpu...) et casse sur l'absence de lib DOM
+- `package.json` — extension manifest (commands, comments/* menus)
+- `src/extension.ts` — logic, compiled to `out/`
+- `tsconfig.json` — `types: ["vscode", "node"]` is deliberate, otherwise tsc walks up
+  into `../../node_modules/@types` (three, webgpu...) and breaks on the missing DOM lib
 
 ## Bootstrap
 
@@ -17,81 +17,79 @@ npm install
 npm run compile
 ```
 
-## Installer en local
+## Installing locally
 
-Pas de F5 / Extension Development Host — VSCodium a un comportement instance-unique :
-ouvrir ce dossier dans une 2e fenêtre refocus la fenêtre déjà ouverte au lieu d'en créer
-une nouvelle. À la place :
+No F5 / Extension Development Host — VSCodium has single-instance behavior: opening
+this folder in a 2nd window just refocuses the already-open window instead of creating
+a new one. Instead:
 
 1. `Ctrl+Shift+P` → **Developer: Install Extension from Location...**
-2. Sélectionner ce dossier (celui avec `package.json`)
-3. Tourne directement dans la fenêtre courante
+2. Select this folder (the one with `package.json`)
+3. Runs directly in the current window
 
-## Boucle de modif
+## Edit loop
 
-1. Éditer `src/extension.ts`
+1. Edit `src/extension.ts`
 2. `npm run compile`
 3. `Ctrl+Shift+P` → **Developer: Reload Window**
 
-## Point non-évident
+## Non-obvious point
 
-Identifier les deux côtés d'un diff ouvert depuis Source Control (groupe
-"Staged Changes") : URI scheme `git`, query JSON avec un champ `ref`.
-- côté staged (droite, nouveau contenu) : `ref === ""` (chaîne vide)
-- côté HEAD (gauche, ancien contenu — nécessaire pour commenter une suppression) :
-  `ref === "HEAD"`
+Identifying the two sides of a diff opened from Source Control (the "Staged Changes"
+group): URI scheme `git`, JSON query with a `ref` field.
+- staged side (right, new content): `ref === ""` (empty string)
+- HEAD side (left, old content — needed to comment on a deletion): `ref === "HEAD"`
 
-Piège : `ref === "~"` ressemble à "staged" mais désigne autre chose (utilisé ailleurs,
-dans le diff working-tree) — ne matche ni l'un ni l'autre de ces deux côtés.
-Vérifié par instrumentation (log des URIs ouvertes dans un output channel), pas de doc
-officielle fiable là-dessus.
+Trap: `ref === "~"` looks like "staged" but is something else (used elsewhere, in the
+working-tree diff) — matches neither of these two sides. Verified by instrumentation
+(logging opened URIs to an output channel), no reliable official doc on this.
 
-## Format `.review.json`
+## `.review.json` format
 
 ```json
 [
   {
     "id": "uuid",
-    "file": "chemin/relatif/au/repo.js",
+    "file": "path/relative/to/repo.js",
     "side": "staged",
     "startLine": 10,
     "endLine": 15,
-    "text": "commentaire",
-    "excerpt": "contenu des lignes commentées",
-    "response": "comment Claude a traité le commentaire"
+    "text": "comment",
+    "excerpt": "content of the commented lines",
+    "response": "how Claude handled the comment"
   }
 ]
 ```
 
-Lignes 1-based, inclusives. `side` précise sur quelle version du fichier portent
-`startLine`/`endLine` : `"staged"` (contenu après modif, cas général) ou `"head"`
-(contenu avant modif — commentaire sur une suppression, lignes absentes du fichier
-staged donc sans correspondance côté `"staged"`).
+1-based, inclusive lines. `side` specifies which version of the file `startLine`/
+`endLine` refer to: `"staged"` (content after the change, the general case) or
+`"head"` (content before the change — commenting on a deletion, lines absent from the
+staged file so they have no `"staged"`-side match).
 
-`response` (optionnel) : écrit directement dans le JSON par Claude après traitement
-d'un commentaire, pas par l'extension elle-même. Affiché comme 2e message du thread
-(auteur "Claude"), lecture seule — pas d'icône éditer/supprimer dessus (voir
-`contextValue` ci-dessous). Le watcher sur `.review.json` rafraîchit l'affichage dès
-que le fichier est modifié, donc apparaît sans action de l'utilisateur.
+`response` (optional): written directly into the JSON by Claude after handling a
+comment, not by the extension itself. Displayed as the thread's 2nd message (author
+"Claude"), read-only — no edit/delete icon on it (see `contextValue` below). The
+watcher on `.review.json` refreshes the display as soon as the file changes, so it
+appears without any user action.
 
-## Re-ancrage sur modif du fichier
+## Re-anchoring on file changes
 
-`startLine`/`endLine` sont figées au moment du commentaire — si des lignes sont
-ajoutées/retirées ailleurs dans le fichier entre la création du commentaire et la
-réouverture du diff, elles deviennent fausses. Mitigé (`locateRange`) : si le texte en
-`excerpt` ne correspond plus aux lignes stockées, recherche ce texte ailleurs dans le
-document et réancre le commentaire dessus. Marche si le texte commenté a juste bougé ;
-pas de solution si le texte lui-même a été modifié ou supprimé (retombe sur les lignes
-stockées, best effort). Recherche par égalité exacte de texte — si le même extrait
-apparaît plusieurs fois dans le fichier, prend la première occurrence.
+`startLine`/`endLine` are frozen at comment-creation time — if lines are added/removed
+elsewhere in the file between creating the comment and reopening the diff, they become
+wrong. Mitigated (`locateRange`): if the text at the stored lines no longer matches
+`excerpt`, searches for that text elsewhere in the document and re-anchors the comment
+there. Works if the commented text just moved; no fix if the text itself was changed
+or deleted (falls back to the stored lines, best effort). Matches by exact text
+equality — if the same excerpt appears multiple times in the file, uses the first
+occurrence.
 
-## Limites actuelles
+## Current limitations
 
-- Staged + HEAD du même diff uniquement (pas unstaged, pas commit arbitraire) —
-  extensible plus tard en élargissant `sideOf`
-- Un seul commentaire + une réponse par thread (pas de fil de discussion multi-tours)
-- Suppression/édition via icônes sur le commentaire (pas de suppression de thread
-  entier) — réservées au commentaire de l'utilisateur via `contextValue: "editable"`,
-  absent sur la réponse de Claude (clé `when` du menu : `comment == editable`)
-- `.review.json` est surveillé (`createFileSystemWatcher`) : toute modif externe
-  (suppression manuelle, vidage par un futur skill) rafraîchit les diffs ouverts
+- Staged + HEAD of the same diff only (not unstaged, not an arbitrary commit) —
+  extensible later by widening `sideOf`
+- One comment + one response per thread (no multi-turn discussion thread)
+- Delete/edit via icons on the comment (no whole-thread deletion) — reserved for the
+  user's own comment via `contextValue: "editable"`, absent on Claude's response (menu
+  `when` key: `comment == editable`)
+- `.review.json` is watched (`createFileSystemWatcher`): any external change (manual
+  deletion, cleared by a future skill) refreshes open diffs
